@@ -91,3 +91,67 @@ function Reload {
 }
 
 Invoke-DotfilesEnvLoad -Scope $Scope
+
+
+function Add-EnvVar {
+  param(
+    [Parameter(Mandatory=$true)][string]$Name,
+    [Parameter(Mandatory=$true)][string]$Value,
+    [ValidateSet("User","Machine","Process")][string]$Scope="User"
+  )
+
+  $envFile = Join-Path $PSScriptRoot ".env.ps1"
+  if (-not (Test-Path $envFile)) { throw "Missing $envFile" }
+
+  $defs = & {
+    $EnvVars = @{}
+    $PathAdd = @()
+    . $envFile
+    [pscustomobject]@{ EnvVars = $EnvVars; PathAdd = $PathAdd }
+  }
+
+  if (-not $defs.EnvVars) { $defs.EnvVars = @{} }
+  $defs.EnvVars[$Name] = $Value
+
+  $out = New-Object System.Collections.Generic.List[string]
+  $out.Add('$EnvVars = @{')
+  foreach ($k in ($defs.EnvVars.Keys | Sort-Object)) {
+    $v = [string]$defs.EnvVars[$k]
+    $v = $v.Replace('"','`"')
+    $out.Add("  `"$k`" = `"$v`"")
+  }
+  $out.Add('}')
+  $out.Add('')
+  $out.Add('$PathAdd = @(')
+  foreach ($p in ($defs.PathAdd | ForEach-Object {[string]$_})) {
+    $pv = $p.Replace('"','`"')
+    $out.Add("  `"$pv`"")
+  }
+  $out.Add(')')
+
+  Set-Content -Encoding UTF8 -Path $envFile -Value ($out -join "`r`n")
+
+  Reload -Scope $Scope
+  Write-Host "Added/updated $Name and reloaded." -ForegroundColor Green
+}
+
+function Push-Dotfiles {
+  param([string]$Message = "Update dotfiles")
+  if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw "git not found" }
+
+  $root = $script:DotfilesRoot
+  if (-not (Test-Path (Join-Path $root ".git"))) { throw "Not a git repo: $root" }
+
+  git -C $root add env\.env.ps1 env\Load-Env.ps1 .gitignore | Out-Null
+
+  $dirty = git -C $root status --porcelain
+  if (-not $dirty) {
+    Write-Host "Nothing to commit." -ForegroundColor Yellow
+    return
+  }
+
+  git -C $root commit -m $Message | Out-Null
+  git -C $root push | Out-Null
+  Write-Host "Pushed to GitHub." -ForegroundColor Green
+}
+
