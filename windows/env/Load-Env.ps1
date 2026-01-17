@@ -375,3 +375,28 @@ function Current {
 }
 # --- end override ---
 
+
+# --- Override Git-FFPush to use repo root (dotfiles/) not windows/ ---
+function Git-FFPush {
+  param([string]$Message = "Force Field Push")
+
+  $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)  # ...\dotfiles
+  if (-not (Test-Path (Join-Path $repoRoot ".git"))) { throw "Not a git repo: $repoRoot" }
+  if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw "git not found" }
+
+  git -C $repoRoot add `
+    windows\env\.env.ps1 `
+    windows\env\Load-Env.ps1 `
+    windows\pwsh\profile.ps1 `
+    windows\pwsh\bootstrap.ps1 `
+    .gitignore | Out-Null
+
+  $dirty = git -C $repoRoot status --porcelain
+  if (-not $dirty) { Write-Host "Nothing to commit." -ForegroundColor Yellow; return }
+
+  git -C $repoRoot commit -m $Message | Out-Null
+  git -C $repoRoot push | Out-Null
+  Write-Host "Pushed to GitHub: $Message" -ForegroundColor Green
+}
+# --- end override ---
+
