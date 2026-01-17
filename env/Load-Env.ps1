@@ -213,3 +213,165 @@ function Current {
     Format-Table -AutoSize Name, Value
 }
 
+
+function Managed {
+  $envFile = Join-Path $PSScriptRoot ".env.ps1"
+  if (-not (Test-Path $envFile)) { throw "Missing $envFile" }
+
+  $defs = & {
+    $EnvVars = @{}
+    $PathAdd = @()
+    . $envFile
+    [pscustomobject]@{ EnvVars = $EnvVars; PathAdd = $PathAdd }
+  }
+
+  $defs.EnvVars.GetEnumerator() |
+    Sort-Object Name |
+    ForEach-Object {
+      [pscustomobject]@{
+        Name = $_.Name
+        DefinedValue = $_.Value
+        CurrentValue = (Get-Item "Env:$($_.Name)" -ErrorAction SilentlyContinue).Value
+      }
+    } | Format-Table -AutoSize
+}
+
+function Current {
+  Get-ChildItem Env: |
+    Sort-Object Name |
+    Format-Table -AutoSize Name, Value
+}
+
+
+function Get-CmdInfo {
+  param([Parameter(Mandatory=$true)][string]$Name, [string[]]$Args=@("--version"))
+  $cmd = Get-Command $Name -ErrorAction SilentlyContinue
+  if (-not $cmd) {
+    return [pscustomobject]@{ Tool=$Name; Installed=$false; Version=""; Path="" }
+  }
+
+  $ver = ""
+  try {
+    $ver = (& $cmd.Source @Args 2>$null | Select-Object -First 1)
+    if (-not $ver) { $ver = (& $Name @Args 2>$null | Select-Object -First 1) }
+  } catch {}
+
+  [pscustomobject]@{
+    Tool      = $Name
+    Installed = $true
+    Version   = [string]$ver
+    Path      = $cmd.Source
+  }
+}
+
+function Current {
+  $items = @()
+
+  $items += Get-CmdInfo git @("--version")
+  $items += Get-CmdInfo winget @("--version")
+  $items += Get-CmdInfo choco @("--version")
+  $items += Get-CmdInfo scoop @("--version")
+
+  $items += Get-CmdInfo pwsh @("--version")
+  $items += Get-CmdInfo python @("--version")
+  $items += Get-CmdInfo py @("--version")
+  $items += Get-CmdInfo node @("--version")
+  $items += Get-CmdInfo npm @("--version")
+  $items += Get-CmdInfo yarn @("--version")
+  $items += Get-CmdInfo pnpm @("--version")
+  $items += Get-CmdInfo go @("version")
+  $items += Get-CmdInfo java @("-version")
+  $items += Get-CmdInfo dotnet @("--info")
+
+  $items += Get-CmdInfo docker @("--version")
+  $items += Get-CmdInfo kubectl @("version","--client","--output=yaml")
+  $items += Get-CmdInfo helm @("version","--short")
+  $items += Get-CmdInfo terraform @("version")
+  $items += Get-CmdInfo packer @("version")
+
+  $items += Get-CmdInfo az @("version")
+  $items += Get-CmdInfo aws @("--version")
+  $items += Get-CmdInfo gcloud @("--version")
+
+  $items += Get-CmdInfo code @("--version")
+  $items += Get-CmdInfo vim @("--version")
+  $items += Get-CmdInfo nano @("--version")
+
+  $items |
+    ForEach-Object {
+      [pscustomobject]@{
+        Tool      = $_.Tool
+        Installed = $_.Installed
+        Version   = ($_.Version -replace "\s+"," " -replace "`r|`n","") 
+        Path      = $_.Path
+      }
+    } |
+    Sort-Object -Property @{Expression='Installed';Descending=$true}, Tool |
+    Format-Table -AutoSize Tool, Installed, Version, Path
+}
+
+function EnvAll {
+  Get-ChildItem Env: | Sort-Object Name | Format-Table -AutoSize Name, Value
+}
+
+
+
+# --- Override Current with a cleaner version (supports -All) ---
+function Current {
+  param([switch]$All)
+
+  $tools = @(
+    @{n="git";      a=@("--version")}
+    @{n="winget";   a=@("--version")}
+    @{n="choco";    a=@("--version")}
+    @{n="scoop";    a=@("--version")}
+
+    @{n="pwsh";     a=@("--version")}
+    @{n="python";   a=@("--version")}
+    @{n="py";       a=@("--version")}
+    @{n="node";     a=@("--version")}
+    @{n="npm";      a=@("--version")}
+    @{n="yarn";     a=@("--version")}
+    @{n="pnpm";     a=@("--version")}
+    @{n="go";       a=@("version")}
+    @{n="java";     a=@("-version")}
+    @{n="dotnet";   a=@("--info")}
+
+    @{n="docker";   a=@("--version")}
+    @{n="kubectl";  a=@("version","--client")}
+    @{n="helm";     a=@("version","--short")}
+    @{n="terraform";a=@("version")}
+    @{n="packer";   a=@("version")}
+
+    @{n="az";       a=@("version")}
+    @{n="aws";      a=@("--version")}
+    @{n="gcloud";   a=@("--version")}
+
+    @{n="code";     a=@("--version")}
+    @{n="vim";      a=@("--version")}
+    @{n="nano";     a=@("--version")}
+  )
+
+  $items = foreach ($t in $tools) {
+    $name = $t.n
+    $cmd = Get-Command $name -ErrorAction SilentlyContinue
+
+    if (-not $cmd) {
+      [pscustomobject]@{ Tool=$name; Installed=$false; Version=""; Path="" }
+      continue
+    }
+
+    $ver = ""
+    try { $ver = (& $cmd.Source @($t.a) 2>$null | Select-Object -First 1) } catch {}
+    $ver = [string]$ver
+    $ver = ($ver -replace "`r|`n","") -replace "\s+"," "
+
+    [pscustomobject]@{ Tool=$name; Installed=$true; Version=$ver; Path=$cmd.Source }
+  }
+
+  if (-not $All) { $items = $items | Where-Object Installed }
+
+  $items | Sort-Object Tool | Format-Table -AutoSize Tool, Installed, Version, Path
+}
+# --- end override ---
+
