@@ -1,10 +1,9 @@
 ﻿$EnvVars = @{
-  "DEV_HOME" = "C:\Users\vladimirsartini\Dev"
-  "DOTFILES" = "C:\Users\vladimirsartini\dotfiles"
-  "EDITOR" = "nano"
-  "TEST_HELLO" = "world"
+  "DOTFILES" = (Join-Path $env:USERPROFILE "dotfiles")
+  "DEV_HOME" = (Join-Path $env:USERPROFILE "Dev")
+  "EDITOR"   = "nano"
 }
 
 $PathAdd = @(
-  "C:\Users\vladimirsartini\bin"
+  (Join-Path $env:USERPROFILE "bin")
 )
