@@ -1,7 +1,9 @@
 ﻿$EnvVars = @{
-  "DOTFILES" = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))  # -> repo root
-  "DEV_HOME" = (Join-Path $env:USERPROFILE "Dev")
+  "DEV_HOME" = "C:\Users\vladimirsartini\Dev"
+  "DOTFILES" = "C:\Users\vladimirsartini\dotfiles"
+  "new variables test" = "1"
 }
+
 $PathAdd = @(
-  (Join-Path $env:USERPROFILE "bin")
+  "C:\Users\vladimirsartini\bin"
 )
